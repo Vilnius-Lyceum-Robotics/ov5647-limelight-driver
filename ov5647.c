@@ -1377,6 +1377,8 @@ static int ov5647_probe(struct i2c_client *client)
 	u32 xclk_freq;
 	int ret;
 
+	printk(KERN_INFO "OV5647: Starting probe\n");
+	
 	sensor = devm_kzalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
 		return -ENOMEM;
@@ -1389,6 +1391,7 @@ static int ov5647_probe(struct i2c_client *client)
 		}
 	}
 
+	printk(KERN_INFO "OV5647: Fetching clock\n");
 	sensor->xclk = devm_clk_get(dev, NULL);
 	if (IS_ERR(sensor->xclk)) {
 		dev_err(dev, "could not get xclk");
@@ -1400,6 +1403,8 @@ static int ov5647_probe(struct i2c_client *client)
 		dev_err(dev, "Unsupported clock frequency: %u\n", xclk_freq);
 		return -EINVAL;
 	}
+	
+	printk(KERN_INFO "OV5647: Clock frequency verified\n");
 
 	/* Request the power down GPIO asserted. */
 	sensor->pwdn = devm_gpiod_get_optional(dev, "pwdn", GPIOD_OUT_HIGH);
@@ -1417,7 +1422,8 @@ static int ov5647_probe(struct i2c_client *client)
 	mutex_init(&sensor->lock);
 
 	sensor->mode = OV5647_DEFAULT_MODE;
-
+	
+	printk(KERN_INFO "OV5647: Initializing controls\n");
 	ret = ov5647_init_controls(sensor, dev);
 	if (ret)
 		goto mutex_destroy;
@@ -1433,14 +1439,21 @@ static int ov5647_probe(struct i2c_client *client)
 	if (ret < 0)
 		goto ctrl_handler_free;
 
+	printk(KERN_INFO "OV5647: Enabling regulators\n");
+	regulator_bulk_enable(3, sensor->supplies);
+	msleep(20); /* 0x14 = 20ms sleep delay */
+	
+	printk(KERN_INFO "OV5647: Powering on\n");
 	ret = ov5647_power_on(dev);
 	if (ret)
 		goto entity_cleanup;
 
+	printk(KERN_INFO "OV5647: Starting I2C communication\n");
 	ret = ov5647_detect(sd);
 	if (ret < 0)
 		goto power_off;
 
+	printk(KERN_INFO "OV5647: Registering subdevice\n");
 	ret = v4l2_async_register_subdev_sensor(sd);
 	if (ret < 0)
 		goto power_off;
@@ -1450,6 +1463,7 @@ static int ov5647_probe(struct i2c_client *client)
 	pm_runtime_enable(dev);
 	pm_runtime_idle(dev);
 
+	printk(KERN_INFO "OV5647: Probe completed successfully\n");
 	dev_dbg(dev, "OmniVision OV5647 camera driver probed\n");
 
 	return 0;
